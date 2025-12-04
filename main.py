@@ -1,26 +1,27 @@
 import os
 import time
-from instagrapi import Client
+import requests
 from pathlib import Path
+from instagrapi import Client
 
 # ----------------------------
-# CONFIG (READ FROM ENV)
+# CONFIG (ENV)
 # ----------------------------
 IG_USERNAME = os.getenv("IG_USERNAME")
 IG_PASSWORD = os.getenv("IG_PASSWORD")
 
 if not IG_USERNAME or not IG_PASSWORD:
-    print("❌ ERROR: IG_USERNAME or IG_PASSWORD not set as environment variables!")
+    print("❌ Set IG_USERNAME and IG_PASSWORD in environment variables!")
     exit()
 
 # ----------------------------
-# SETUP
+# FOLDERS
 # ----------------------------
 BASE = Path(__file__).parent
-STORAGE_DIR = BASE / "storage"
-SESSION_FILE = BASE / "session.json"
+STORAGE = BASE / "storage"
+SESSION = BASE / "session.json"
 
-STORAGE_DIR.mkdir(exist_ok=True)
+STORAGE.mkdir(exist_ok=True)
 
 cl = Client()
 
@@ -28,38 +29,39 @@ cl = Client()
 # LOGIN
 # ----------------------------
 def login():
-    if SESSION_FILE.exists():
+    if SESSION.exists():
         try:
-            cl.load_settings(str(SESSION_FILE))
+            cl.load_settings(str(SESSION))
             cl.login(IG_USERNAME, IG_PASSWORD)
-            print("✓ Loaded session file")
+            print("✓ Session loaded")
             return
         except:
-            print("⚠ Session invalid, logging normally…")
+            print("⚠ Old session invalid, logging fresh...")
 
     cl.login(IG_USERNAME, IG_PASSWORD)
-    cl.dump_settings(str(SESSION_FILE))
+    cl.dump_settings(str(SESSION))
     print("✓ Logged in & saved session")
+
 
 login()
 
 # ----------------------------
-# COMMAND HANDLERS
+# SEND DM
 # ----------------------------
-def handle_command(msg, thread_id, user_id, username):
+def send_dm(text, thread_id, file=None):
+    try:
+        cl.direct_send(text, thread_id, file=file)
+    except Exception as e:
+        print("DM ERROR:", e)
+
+# ----------------------------
+# COMMAND HANDLER
+# ----------------------------
+def handle_command(msg, thread_id, user_id):
     text = msg.lower()
 
-    # /whoami
-    if text == "/whoami":
-        cl.direct_send(
-            "👑 I am the retired leader of TEAM NXR.\nI protect confidential files.\nCommands: /save, /get, /list, /help",
-            thread_id
-        )
-        return
-
-    # /help
     if text == "/help":
-        cl.direct_send(
+        send_dm(
             "📌 Commands:\n"
             "/save <name> (send with file)\n"
             "/get <name>\n"
@@ -69,39 +71,66 @@ def handle_command(msg, thread_id, user_id, username):
         )
         return
 
-    # /list
+    if text == "/whoami":
+        send_dm("👑 TEAM NXR Secure Storage Bot", thread_id)
+        return
+
     if text == "/list":
-        files = os.listdir(STORAGE_DIR)
+        files = os.listdir(STORAGE)
         user_files = [f for f in files if f.startswith(f"{user_id}_")]
-        
+
         if not user_files:
-            cl.direct_send("📂 No saved items.", thread_id)
+            send_dm("📂 No saved items.", thread_id)
         else:
             names = [f.split("_", 1)[1] for f in user_files]
-            cl.direct_send("📁 Saved items:\n" + "\n".join(names), thread_id)
+            send_dm("📁 Saved items:\n" + "\n".join(names), thread_id)
         return
 
-    # /get <name>
     if text.startswith("/get "):
         name = text.replace("/get ", "").strip()
-        filename = f"{user_id}_{name}"
+        filepath = STORAGE / f"{user_id}_{name}"
 
-        filepath = STORAGE_DIR / filename
         if not filepath.exists():
-            cl.direct_send("❌ Item not found.", thread_id)
+            send_dm("❌ Not found.", thread_id)
             return
-        
-        cl.direct_send("", thread_id, file=str(filepath))
+
+        send_dm("", thread_id, file=str(filepath))
         return
 
-    # /save <name>
     if text.startswith("/save "):
-        cl.direct_send("📥 Please send the file with same name again.", thread_id)
+        send_dm("📥 Now send file again with same name.", thread_id)
         return
 
 
 # ----------------------------
-# POLLING LOOP
+# SAVE FILE
+# ----------------------------
+def save_file(msg, thread_id, user_id):
+    if not msg.text:
+        send_dm("❌ Use: /save <name> with file", thread_id)
+        return
+
+    filename = msg.text.strip()
+    file_path = STORAGE / f"{user_id}_{filename}"
+
+    try:
+        url = msg.media_url
+        if not url:
+            send_dm("❌ Media URL missing!", thread_id)
+            return
+
+        data = requests.get(url).content
+        with open(file_path, "wb") as f:
+            f.write(data)
+
+        send_dm(f"✅ Saved as {filename}", thread_id)
+    except Exception as e:
+        print("SAVE ERROR:", e)
+        send_dm("❌ Failed to save file.", thread_id)
+
+
+# ----------------------------
+# MAIN LOOP
 # ----------------------------
 print("🤖 TEAM NXR STORAGE BOT STARTED…")
 
@@ -115,40 +144,25 @@ while True:
             if not th.items:
                 continue
 
-            msg_obj = th.items[0]
-            msg_id = msg_obj.id
+            msg = th.items[0]  # latest message
+            msg_id = msg.id
+            user = th.users[0]
+            user_id = user.pk
 
             if msg_id in processed:
                 continue
-
             processed.add(msg_id)
 
-            user = th.users[0]
-            user_id = user.pk
-            username = user.username
-
-            text = msg_obj.text or ""
-            media = msg_obj.media or None
-
-            # COMMAND?
-            if text.startswith("/"):
-                handle_command(text, th.id, user_id, username)
+            # COMMAND
+            if msg.text and msg.text.startswith("/"):
+                handle_command(msg.text, th.id, user_id)
                 continue
 
-            # FILE SAVE SYSTEM
-            if media:
-                name = text.strip()
-                if not name:
-                    cl.direct_send("❌ Use: /save <name> with file", th.id)
-                    continue
-
-                save_path = STORAGE_DIR / f"{user_id}_{name}"
-                cl.direct_download(media.pk, str(save_path))
-
-                cl.direct_send(f"✅ Saved as: {name}", th.id)
-                continue
+            # MEDIA
+            if msg.media:
+                save_file(msg, th.id, user_id)
 
     except Exception as e:
-        print("Error:", e)
+        print("LOOP ERROR:", e)
 
     time.sleep(5)
