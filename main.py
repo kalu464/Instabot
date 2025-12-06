@@ -123,14 +123,14 @@ async def bot_loop(bot, chat_id, base, mode):
 # ---------------------------
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "𓆩𓆩⃟⚡𝐍𝐎𝐁𝐈𝐗 ~ भगवान हूँ - 🔱 ⃟𓆪𓆪\n"
+        "𓆩𓆩⃟⚡ZAYDEN ~ भगवान हूँ - 🔱 ⃟𓆪𓆪\n"
         "✨ Welcome! Use /help to explore the command menu."
     )
 
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "𓆩𓆩⃟⚡𝐍𝐎𝐁𝐈𝐗 ~ भगवान हूँ - 🔱 ⃟𓆪𓆪\n"
+        "𓆩𓆩⃟⚡ZAYDEN ~ भगवान हूँ - 🔱 ⃟𓆪𓆪\n"
         "           ✦ ᴏғғɪᴄɪᴀʟ ᴄᴏᴍᴍᴀɴᴅ ᴍᴇɴᴜ ✦\n"
         "────────────────────────────────\n\n"
         
@@ -163,7 +163,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/myid\n"
         "/ping\n\n"
         "────────────────────────────────\n"
-        "✦ ᴘᴏᴡᴇʀᴇᴅ ʙʏ ɴᴏʙɪx ✦"
+        "✦ ᴘᴏᴡᴇʀᴇᴅ ʙʏ @scary_godz ✦"
     )
 
 async def ping_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
